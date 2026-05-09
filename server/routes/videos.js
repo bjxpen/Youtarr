@@ -57,6 +57,81 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
 
   /**
    * @swagger
+   * /api/videos/export:
+   *   get:
+   *     summary: Get videos for export
+   *     description: Retrieve a list of videos for export based on filters or specific IDs.
+   *     tags: [Videos]
+   *     parameters:
+   *       - in: query
+   *         name: videoIds
+   *         schema:
+   *           type: string
+   *         description: Comma-separated list of video IDs
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: dateFrom
+   *         schema:
+   *           type: string
+   *           format: date
+   *       - in: query
+   *         name: dateTo
+   *         schema:
+   *           type: string
+   *           format: date
+   *       - in: query
+   *         name: sortBy
+   *         schema:
+   *           type: string
+   *           enum: [added, title, date]
+   *       - in: query
+   *         name: sortOrder
+   *         schema:
+   *           type: string
+   *           enum: [asc, desc]
+   *       - in: query
+   *         name: channelFilter
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: List of videos for export
+   *       500:
+   *         description: Failed to get videos for export
+   */
+  router.get('/api/videos/export', verifyToken, async (req, res) => {
+    req.log.info('Exporting videos');
+
+    try {
+      const { videoIds, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter, missingFilter } = req.query;
+
+      const parseFilterMode = (value) => (value === 'only' || value === 'exclude' ? value : 'off');
+
+      const options = {
+        videoIds: videoIds ? videoIds.split(',').map(id => parseInt(id, 10)) : [],
+        search: search || '',
+        dateFrom: dateFrom || null,
+        dateTo: dateTo || null,
+        sortBy: sortBy || 'added',
+        sortOrder: sortOrder || 'desc',
+        channelFilter: channelFilter || '',
+        protectedFilter: parseFilterMode(protectedFilter),
+        missingFilter: parseFilterMode(missingFilter),
+      };
+
+      const result = await videosModule.getVideosForExport(options);
+      res.json(result);
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to export videos');
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * @swagger
    * /getVideos:
    *   get:
    *     summary: Get downloaded videos

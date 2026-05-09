@@ -4,6 +4,7 @@ import {
   LayoutGrid as GridIcon,
   Rows as TableIcon,
   List as ListIcon,
+  LayoutList as GroupedIcon,
 } from '../../../lib/icons';
 import { VideoListViewMode } from './types';
 
@@ -18,11 +19,13 @@ const LABELS: Record<VideoListViewMode, string> = {
   grid: 'Grid View',
   list: 'List View',
   table: 'Table View',
+  grouped: 'Grouped View',
 };
 
 function IconFor({ mode, size = 16 }: { mode: VideoListViewMode; size?: number }) {
   if (mode === 'grid') return <GridIcon size={size} />;
   if (mode === 'list') return <ListIcon size={size} />;
+  if (mode === 'grouped') return <GroupedIcon size={size} />;
   return <TableIcon size={size} />;
 }
 

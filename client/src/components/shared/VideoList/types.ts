@@ -1,6 +1,6 @@
 import type React from 'react';
 
-export type VideoListViewMode = 'grid' | 'list' | 'table';
+export type VideoListViewMode = 'grid' | 'list' | 'table' | 'grouped';
 
 export type ChipFilterMode = 'off' | 'only' | 'exclude';
 

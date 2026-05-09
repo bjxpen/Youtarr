@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useSwipeable } from 'react-swipeable';
-import { Alert, Box, Grid, Snackbar, Typography } from '../ui';
-import { Trash2 as DeleteIcon, Star as RatingIcon } from '../../lib/icons';
+import { Alert, Box, Grid, Snackbar, Typography, Checkbox, Button } from '../ui';
+import { Trash2 as DeleteIcon, Star as RatingIcon, FileDown as ExportIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { VideoData } from '../../types/VideoData';
@@ -16,6 +16,7 @@ import VideoCard from './components/VideoCard';
 import VideosTable from './components/VideosTable';
 import VideosListMobile from './components/VideosListMobile';
 import { useVideosData } from './hooks/useVideosData';
+import ExportVideosDialog from '../shared/ExportVideosDialog';
 import {
   INFINITE_SCROLL_FETCH_SIZE,
   VideoListContainer,
@@ -86,6 +87,8 @@ function VideosPage({ token }: VideosPageProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportVideoIds, setExportVideoIds] = useState<number[]>([]);
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -224,6 +227,16 @@ function VideosPage({ token }: VideosPageProps) {
   const selectionActions = useMemo<SelectionAction<number>[]>(
     () => [
       {
+        id: 'export',
+        label: 'Export',
+        icon: <ExportIcon size={14} />,
+        intent: 'primary',
+        onClick: (ids) => {
+          setExportVideoIds(ids);
+          setExportDialogOpen(true);
+        },
+      },
+      {
         id: 'rating',
         label: 'Rating',
         icon: <RatingIcon size={14} />,
@@ -291,6 +304,11 @@ function VideosPage({ token }: VideosPageProps) {
   };
 
   const handleOpenModal = (video: VideoData) => setModalVideo(video);
+
+  const handleExportFiltered = () => {
+    setExportVideoIds([]); // Clear specific IDs to use filters instead
+    setExportDialogOpen(true);
+  };
 
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
@@ -399,6 +417,83 @@ function VideosPage({ token }: VideosPageProps) {
   ) : null;
 
   const renderContent = (mode: VideoListViewMode) => {
+    if (mode === 'grouped') {
+      const grouped: Record<string, VideoData[]> = {};
+      videos.forEach((video) => {
+        const channel = video.youTubeChannelName || 'Unknown Channel';
+        if (!grouped[channel]) grouped[channel] = [];
+        grouped[channel].push(video);
+      });
+
+      return (
+        <Box>
+          {Object.entries(grouped).map(([channel, channelVideos]) => {
+            const channelSelectableIds = channelVideos
+              .filter((v) => !v.removed)
+              .map((v) => v.id);
+            const allChannelSelected =
+              channelSelectableIds.length > 0 &&
+              channelSelectableIds.every((id) => selection.isSelected(id));
+            const someChannelSelected =
+              !allChannelSelected &&
+              channelSelectableIds.some((id) => selection.isSelected(id));
+
+            return (
+              <Box key={channel} sx={{ mb: 4 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    mb: 1,
+                    pb: 1,
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <Checkbox
+                    indeterminate={someChannelSelected}
+                    checked={allChannelSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        selection.add(channelSelectableIds);
+                      } else {
+                        selection.set(
+                          selection.selectedIds.filter(
+                            (id) => !channelSelectableIds.includes(id)
+                          )
+                        );
+                      }
+                    }}
+                  />
+                  <Typography variant="h6">{channel}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ({channelVideos.length} video{channelVideos.length !== 1 ? 's' : ''})
+                  </Typography>
+                </Box>
+                <Grid container spacing={2}>
+                  {channelVideos.map((video) => (
+                    <Grid item xs={12} sm={6} md={4} lg={3} key={video.id}>
+                      <VideoCard
+                        video={video}
+                        selected={selection.isSelected(video.id)}
+                        enabledChannels={enabledChannels}
+                        imageErrored={Boolean(imageErrors[video.youtubeId])}
+                        deleteDisabled={deleteLoading}
+                        onToggleSelect={handleToggleSelect}
+                        onOpenModal={handleOpenModal}
+                        onToggleProtection={handleToggleProtection}
+                        onDeleteSingle={handleDeleteSingleVideo}
+                        onImageError={handleImageError}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            );
+          })}
+        </Box>
+      );
+    }
     if (mode === 'grid') {
       return (
         <Grid container spacing={2}>
@@ -432,6 +527,10 @@ function VideosPage({ token }: VideosPageProps) {
           onOpenModal={handleOpenModal}
           onToggleProtection={handleToggleProtection}
           onImageError={handleImageError}
+          onSelectVideos={(ids) => selection.add(ids)}
+          onDeselectVideos={(ids) =>
+            selection.set(selection.selectedIds.filter((id) => !ids.includes(id)))
+          }
         />
       );
     }
@@ -451,6 +550,10 @@ function VideosPage({ token }: VideosPageProps) {
         onToggleProtection={handleToggleProtection}
         onDeleteSingle={handleDeleteSingleVideo}
         onImageError={handleImageError}
+        onSelectVideos={(ids) => selection.add(ids)}
+        onDeselectVideos={(ids) =>
+          selection.set(selection.selectedIds.filter((id) => !ids.includes(id)))
+        }
       />
     );
   };
@@ -459,8 +562,8 @@ function VideosPage({ token }: VideosPageProps) {
   const activeSort = listState.viewMode === 'table' && !isMobile ? undefined : sortConfig;
 
   const availableViewModes: VideoListViewMode[] = isMobile
-    ? ['grid', 'list']
-    : ['grid', 'table'];
+    ? ['grid', 'list', 'grouped']
+    : ['grid', 'table', 'grouped'];
 
   useEffect(() => {
     if (!availableViewModes.includes(listState.viewMode)) {
@@ -479,6 +582,16 @@ function VideosPage({ token }: VideosPageProps) {
         sort={activeSort}
         searchPlaceholder="Search videos by name or channel..."
         headerSlot={headerSlot}
+        toolbarRightActions={
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleExportFiltered}
+            startIcon={<ExportIcon size={16} />}
+          >
+            Export
+          </Button>
+        }
         itemCount={videos.length}
         isLoading={loading}
         isError={Boolean(loadError)}
@@ -543,6 +656,27 @@ function VideosPage({ token }: VideosPageProps) {
           {protectionError}
         </Alert>
       </Snackbar>
+
+      <ExportVideosDialog
+        open={exportDialogOpen}
+        onClose={() => {
+          setExportDialogOpen(false);
+          setExportVideoIds([]);
+        }}
+        token={token}
+        videoIds={exportVideoIds}
+        filters={{
+          search: listState.search,
+          channelFilter,
+          dateFrom,
+          dateTo,
+          maxRating: maxRatingFilter,
+          protectedFilter,
+          missingFilter,
+          sortBy: orderBy,
+          sortOrder: sortOrder,
+        }}
+      />
 
       {modalVideo && (
         <VideoModal
