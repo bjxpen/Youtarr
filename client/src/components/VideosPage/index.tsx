@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useSwipeable } from 'react-swipeable';
 import { Alert, Box, Grid, Snackbar, Typography, Checkbox, Button } from '../ui';
-import { Trash2 as DeleteIcon, Star as RatingIcon, FileDown as ExportIcon } from '../../lib/icons';
+import { Trash2 as DeleteIcon, Star as RatingIcon, FileDownload as ExportIcon } from '../../lib/icons';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { VideoData } from '../../types/VideoData';
