@@ -40,29 +40,57 @@ const AUDIO_EXTENSIONS = ['.mp3'];
 const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
 
 /**
- * yt-dlp output template for channel folder name
+ * Truncation limits for channel and video names (in bytes)
+ * Used to avoid "File name too long" errors on restricted filesystems (e.g. eCryptfs)
+ */
+const CHANNEL_NAME_DEFAULT_BYTES = 80;
+const CHANNEL_NAME_MIN_BYTES = 32;
+const VIDEO_TITLE_DEFAULT_BYTES = 76;
+const VIDEO_TITLE_MIN_BYTES = 50;
+
+/**
+ * Build yt-dlp output template for channel folder name
  * Uses uploader with fallback to channel, then uploader_id
- * Truncated to 80 bytes max to avoid filesystem path length issues with UTF-8 characters
+ * @param {number} byteLimit - Byte limit for truncation (default: 80)
+ * @returns {string} - Template segment
  */
-const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
+const getChannelTemplate = (byteLimit = CHANNEL_NAME_DEFAULT_BYTES) =>
+  `%(uploader,channel,uploader_id).${byteLimit}B`;
 
 /**
- * yt-dlp output template for video folder name
+ * yt-dlp output template for channel folder name (default 80B)
+ */
+const CHANNEL_TEMPLATE = getChannelTemplate();
+
+/**
+ * Build yt-dlp output template for video folder name
  * Format: "ChannelName - VideoTitle - VideoID"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
- * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
+ * @param {number} channelLimit - Byte limit for channel uploader truncation (default: 80)
+ * @param {number} titleLimit - Byte limit for title truncation (default: 76)
+ * @returns {string} - Template segment
  */
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B - %(id)s`;
+const getVideoFolderTemplate = (channelLimit = CHANNEL_NAME_DEFAULT_BYTES, titleLimit = VIDEO_TITLE_DEFAULT_BYTES) =>
+  `${getChannelTemplate(channelLimit)} - %(title).${titleLimit}B - %(id)s`;
 
 /**
- * yt-dlp output template for video file name
- * Format: "ChannelName - VideoTitle [VideoID].ext"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
- * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
+ * yt-dlp output template for video folder name (default 80B channel, 76B title)
  */
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s].%(ext)s`;
+const VIDEO_FOLDER_TEMPLATE = getVideoFolderTemplate();
+
+/**
+ * Build yt-dlp output template for video file name
+ * Format: "ChannelName - VideoTitle [VideoID].ext"
+ * @param {number} channelLimit - Byte limit for channel uploader truncation (default: 80)
+ * @param {number} titleLimit - Byte limit for title truncation (default: 76)
+ * @returns {string} - Template segment
+ */
+const getVideoFileTemplate = (channelLimit = CHANNEL_NAME_DEFAULT_BYTES, titleLimit = VIDEO_TITLE_DEFAULT_BYTES) =>
+  `${getChannelTemplate(channelLimit)} - %(title).${titleLimit}B [%(id)s].%(ext)s`;
+
+/**
+ * yt-dlp output template for video file name (default 80B channel, 76B title)
+ */
+const VIDEO_FILE_TEMPLATE = getVideoFileTemplate();
 
 /**
  * Pattern to extract YouTube video ID from filename
@@ -134,6 +162,13 @@ module.exports = {
   VIDEO_EXTENSIONS,
   AUDIO_EXTENSIONS,
   MEDIA_EXTENSIONS,
+  CHANNEL_NAME_DEFAULT_BYTES,
+  CHANNEL_NAME_MIN_BYTES,
+  VIDEO_TITLE_DEFAULT_BYTES,
+  VIDEO_TITLE_MIN_BYTES,
+  getChannelTemplate,
+  getVideoFolderTemplate,
+  getVideoFileTemplate,
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
@@ -145,5 +180,10 @@ module.exports = {
   MAIN_MEDIA_FILE_PATTERN,
   FRAGMENT_FILE_PATTERN,
   CHANNEL_CLEANUP_IGNORABLE_FILES,
-  APPLEDOUBLE_FILE_PATTERN
+  APPLEDOUBLE_FILE_PATTERN,
+  PATH_TRUNCATION_TIERS: [
+    { channel: 80, title: 76 }, // Tier 1: Default
+    { channel: 80, title: 50 }, // Tier 2: Shortened title
+    { channel: 32, title: 50 }  // Tier 3: Shortened both
+  ]
 };

@@ -235,6 +235,21 @@ class DownloadExecutor {
     }
   }
 
+  /**
+   * Determine if an error message indicates a filesystem path length issue
+   * that could be resolved by tightening truncation limits.
+   * @param {string} message - The error message from yt-dlp
+   * @returns {boolean} - True if it's a path length error
+   */
+  isPathLengthError(message = '') {
+    const normalized = String(message);
+    return (
+      normalized.includes('Errno 36') ||
+      normalized.includes('File name too long') ||
+      normalized.includes('Cannot write video metadata to JSON file')
+    );
+  }
+
   isExpectedYtdlpSkipMessage(message = '') {
     const normalized = String(message);
     const expectedPatterns = [
@@ -491,6 +506,10 @@ class DownloadExecutor {
   }
 
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false) {
+    return await this.doDownloadWithRetries(args, jobId, jobType, urlCount, originalUrls, allowRedownload, skipJobTransition, subfolderOverride, ratingOverride, skipVideoFolder);
+  }
+
+  async doDownloadWithRetries(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false, truncationTierIndex = 0) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -814,9 +833,14 @@ class DownloadExecutor {
                     failedVideos.set(currentVideoId, {
                       youtubeId: currentVideoId,
                       error: lastErrorMessage,
-                      url: null // Will be populated later from urlsToProcess
+                      url: null, // Will be populated later from urlsToProcess
+                      isPathLengthError: this.isPathLengthError(lastErrorMessage)
                     });
-                    logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
+                    logger.info({
+                      youtubeId: currentVideoId,
+                      error: lastErrorMessage,
+                      isPathLengthError: failedVideos.get(currentVideoId).isPathLengthError
+                    }, 'Recorded video failure');
                   }
                 }
               }
@@ -892,9 +916,14 @@ class DownloadExecutor {
                 failedVideos.set(currentVideoId, {
                   youtubeId: currentVideoId,
                   error: lastErrorMessage,
-                  url: null // Will be populated later from urlsToProcess
+                  url: null, // Will be populated later from urlsToProcess
+                  isPathLengthError: this.isPathLengthError(lastErrorMessage)
                 });
-                logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure from stderr');
+                logger.info({
+                  youtubeId: currentVideoId,
+                  error: lastErrorMessage,
+                  isPathLengthError: failedVideos.get(currentVideoId).isPathLengthError
+                }, 'Recorded video failure from stderr');
               }
             });
         }
@@ -1489,7 +1518,108 @@ class DownloadExecutor {
           }
         }
 
-        // Only refresh Plex and start next job if not processing multiple groups
+        // Tiered retry logic for path length errors
+        const videosToRetry = failedVideosList.filter(v => {
+          const originalFailure = failedVideos.get(v.youtubeId);
+          return originalFailure && originalFailure.isPathLengthError;
+        });
+
+        const nextTierIndex = truncationTierIndex + 1;
+        const hasNextTier = nextTierIndex < filesystem.PATH_TRUNCATION_TIERS.length;
+
+        if (videosToRetry.length > 0 && hasNextTier) {
+          const retryUrls = videosToRetry.map(v => v.url).filter(Boolean);
+          if (retryUrls.length > 0) {
+            const nextTier = filesystem.PATH_TRUNCATION_TIERS[nextTierIndex];
+            logger.info({
+              retryCount: retryUrls.length,
+              nextTier,
+              nextTierIndex
+            }, 'Retrying videos with tighter path truncation limits');
+
+            // Build new args for retry by updating existing args with tighter limits
+            const YtdlpCommandBuilder = require('./ytdlpCommandBuilder');
+
+            // Find current subfolder (needed to build correct new output path)
+            // For grouped downloads, subfolder is part of the group config but we don't have it here.
+            // However, buildOutputPath handles null subfolder correctly.
+            const newOutputPath = YtdlpCommandBuilder.buildOutputPath(
+              null, // Subfolder override is passed via ENV, so we use null here for the template
+              skipVideoFolder,
+              nextTier.channel,
+              nextTier.title
+            );
+            const newThumbnailPath = YtdlpCommandBuilder.buildThumbnailPath(
+              null,
+              skipVideoFolder,
+              nextTier.channel,
+              nextTier.title
+            );
+
+            // Start with original args to preserve all custom settings (audio format, filters, etc.)
+            let retryArgs = YtdlpCommandBuilder.updateOutputPaths(args, newOutputPath, newThumbnailPath);
+
+            // Replace URLs in retryArgs with only the failed URLs
+            // URLs are usually at the end, but could be anywhere if custom args were used.
+            // Simple approach: filter out anything that looks like a URL from the original args
+            // and append only the retry URLs.
+            retryArgs = retryArgs.filter(arg => {
+              if (arg.startsWith('https://') || arg.startsWith('http://')) return false;
+              // Also filter out the input file if it was a batch download (-a)
+              // because we want to pass specific URLs for the retry
+              return true;
+            });
+
+            // Remove -a and its following file path if present
+            const batchIdx = retryArgs.indexOf('-a');
+            if (batchIdx !== -1) {
+              retryArgs.splice(batchIdx, 2);
+            }
+
+            // Add retry URLs
+            retryUrls.forEach(url => retryArgs.push(url));
+
+            // Execute retry recursively
+            await this.doDownloadWithRetries(
+              retryArgs,
+              jobId,
+              `${jobType} (Path Retry Tier ${nextTierIndex + 1})`,
+              retryUrls.length,
+              retryUrls,
+              allowRedownload,
+              true, // Skip job transition for intermediate retries
+              subfolderOverride,
+              ratingOverride,
+              skipVideoFolder,
+              nextTierIndex
+            );
+
+            // Reload job to get accumulated video data after retry
+            const updatedJob = jobModule.getJob(jobId);
+            if (updatedJob && updatedJob.data) {
+              videoData = updatedJob.data.videos || [];
+              const allFailedVideos = updatedJob.data.failedVideos || [];
+
+              // Recalculate failedVideosList: remove videos that eventually succeeded
+              const successIds = new Set(videoData.map((v) => v.youtubeId));
+              failedVideosList = allFailedVideos.filter((v) => !successIds.has(v.youtubeId));
+
+              // Deduplicate failedVideosList by youtubeId
+              const seenFailed = new Set();
+              failedVideosList = failedVideosList.filter((v) => {
+                if (!v.youtubeId || seenFailed.has(v.youtubeId)) return false;
+                seenFailed.add(v.youtubeId);
+                return true;
+              });
+
+              // Update the job with the cleaned failedVideos list
+              updatedJob.data.failedVideos = failedVideosList;
+              await jobModule.saveJobOnly(jobId, updatedJob);
+            }
+          }
+        }
+
+        // Only refresh Plex and start next job if not processing multiple groups AND not in an intermediate retry
         if (!skipJobTransition) {
           // Derive the set of subfolders from where each video actually ended up
           // on disk. This mirrors reality (the post-processor may have placed

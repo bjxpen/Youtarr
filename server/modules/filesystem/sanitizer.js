@@ -95,8 +95,43 @@ function sanitizeNameLikeYtDlp(name) {
   return sanitized || '_';
 }
 
+/**
+ * Truncate a string to a maximum number of bytes while ensuring it remains valid UTF-8
+ * Replicates yt-dlp's byte-based truncation logic
+ *
+ * @param {string} s - The string to truncate
+ * @param {number} maxBytes - The maximum allowed bytes
+ * @returns {string} - The truncated string
+ */
+function truncateToBytes(s, maxBytes) {
+  if (!s || typeof s !== 'string' || maxBytes <= 0) {
+    return s;
+  }
+
+  const buf = Buffer.from(s, 'utf8');
+  if (buf.length <= maxBytes) {
+    return s;
+  }
+
+  // Truncate the buffer
+  const truncatedBuf = buf.slice(0, maxBytes);
+
+  // Convert back to string. This might end with a partial multi-byte character.
+  // The 'utf8' decoder will handle partial characters by replacing them with the replacement character U+FFFD.
+  let truncatedStr = truncatedBuf.toString('utf8');
+
+  // If the last character is the replacement character, it means we cut in the middle of a multi-byte character.
+  // We need to remove it until we have a valid string.
+  while (truncatedStr.length > 0 && truncatedStr.endsWith('\uFFFD')) {
+    truncatedStr = truncatedStr.slice(0, -1);
+  }
+
+  return truncatedStr;
+}
+
 module.exports = {
   sanitizePathLikeYtDlp,
   sanitizeNameLikeYtDlp,
-  sanitizePathParts
+  sanitizePathParts,
+  truncateToBytes
 };
