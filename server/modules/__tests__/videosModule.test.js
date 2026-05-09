@@ -43,7 +43,9 @@ describe('VideosModule', () => {
 
     // Mock configModule
     mockConfigModule = {
-      directoryPath: '/test/output/dir'
+      directoryPath: '/test/output/dir',
+      getImagePath: jest.fn().mockReturnValue('/test/output/images'),
+      ffmpegPath: '/usr/bin/ffmpeg'
     };
 
     mockVideoValidationModule = {

@@ -151,7 +151,7 @@ class JobModule {
             configModule.directoryPath,
             preferredChannelName,
             `${preferredChannelName} - ${info.title} - ${info.id}`,
-            `${preferredChannelName} - ${info.title}  [${info.id}]`
+            `${preferredChannelName} - ${info.title} [${info.id}]`
           );
 
           const fallbackExtensions = ['.mp4', '.webm', '.mkv', '.m4v', '.avi'];
@@ -841,7 +841,7 @@ class JobModule {
           const baseOutputPath = configModule.directoryPath;
           const preferredChannelName = info.uploader || info.channel || info.uploader_id || info.channel_id || 'Unknown Channel';
           const videoFolder = `${preferredChannelName} - ${info.title} - ${info.id}`;
-          const videoFileName = `${preferredChannelName} - ${info.title}  [${info.id}].mp4`;
+          const videoFileName = `${preferredChannelName} - ${info.title} [${info.id}].mp4`;
           const fullPath = path.join(baseOutputPath, preferredChannelName, videoFolder, videoFileName);
 
           const payload = {

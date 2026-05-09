@@ -151,11 +151,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
     }
 
-    const filename = path.basename(jsonPath, '.info.json'); // get the filename
-    const matches = filename.match(/\[(.*?)\]/g); // Extract all occurrences of video IDs enclosed in brackets
-    const id = matches
-      ? matches[matches.length - 1].replace(/[[\]]/g, '')
-      : 'default'; // take the last match and remove brackets or use 'default'
+    const id = jsonData.id || 'default';
     const directoryPath = path.join(configModule.getJobsPath(), 'info');
     const newImagePath = configModule.getImagePath();
 
@@ -406,26 +402,44 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       logger.warn({ err }, 'Could not embed metadata via AtomicParsley');
     }
 
+    // Detect and process video thumbnail
+    let detectedImagePath = null;
     if (fs.existsSync(imagePath)) {
-      // check if image thumbnail exists
-      const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`); // define the new path for image thumbnail
-      const newImageFullPathSmall = path.join(
-        newImagePath,
-        `videothumb-${id}-small.jpg`
-      ); // define the new path for image thumbnail
-      fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
-
-      // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
-      // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
+      detectedImagePath = imagePath;
+    } else {
+      // Fallback: search video directory for any .jpg matching the ID
       try {
+        const filesInDir = fs.readdirSync(videoDirectory);
+        const matchingThumb = filesInDir.find(f =>
+          f.toLowerCase().endsWith('.jpg') &&
+          (f.includes(`[${id}]`) || f.includes(` - ${id}`))
+        );
+        if (matchingThumb) {
+          detectedImagePath = path.join(videoDirectory, matchingThumb);
+          logger.info({ detectedImagePath, id }, 'Located thumbnail via fallback search');
+        }
+      } catch (dirErr) {
+        logger.warn({ dirErr, videoDirectory }, 'Error scanning directory for thumbnail fallback');
+      }
+    }
+
+    if (detectedImagePath) {
+      const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`);
+      const newImageFullPathSmall = path.join(newImagePath, `videothumb-${id}-small.jpg`);
+
+      try {
+        fs.copySync(detectedImagePath, newImageFullPath, { overwrite: true });
+
+        // Resize the image using ffmpeg
         execSync(
           `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
           { stdio: 'inherit' }
         );
-        fs.rename(newImageFullPathSmall, newImageFullPath);
-        logger.info('Image resized successfully');
+        // Use renameSync to ensure the operation completes before the script exits
+        fs.renameSync(newImageFullPathSmall, newImageFullPath);
+        logger.info({ id }, 'Image processed and resized successfully');
       } catch (err) {
-        logger.error({ err }, 'Error resizing image');
+        logger.error({ err, id }, 'Error processing video thumbnail');
       }
     }
 

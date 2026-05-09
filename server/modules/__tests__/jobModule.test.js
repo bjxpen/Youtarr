@@ -498,7 +498,7 @@ describe('JobModule', () => {
             description: 'Test',
             upload_date: '20240101',
             channel_id: 'channel-1',
-            _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+            _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1 [video-1].mp4'
           });
         }
         if (filePath.includes('video-2')) {
@@ -599,7 +599,7 @@ describe('JobModule', () => {
         duration: 100,
         upload_date: '20240101',
         channel_id: 'channel-1',
-        _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+        _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1 [video-1].mp4'
       }));
       fsPromises.access.mockResolvedValue();
       fsPromises.stat.mockResolvedValue({ size: 12345 });
@@ -2188,7 +2188,7 @@ describe('JobModule', () => {
       expect(Video.create).toHaveBeenCalledWith(
         expect.objectContaining({
           youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1 [video-1].mp4',
           fileSize: '123456789',
           removed: false
         })
@@ -2236,7 +2236,7 @@ describe('JobModule', () => {
       expect(Video.create).not.toHaveBeenCalled();
       // Should update the existing video with file metadata
       expect(mockVideoInstance.update).toHaveBeenCalledWith({
-        filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+        filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1 [video-1].mp4',
         fileSize: '987654321',
         removed: false
       });
@@ -2284,7 +2284,7 @@ describe('JobModule', () => {
       expect(Video.create).toHaveBeenCalledWith(
         expect.objectContaining({
           youtubeId: 'video-1',
-          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].webm',
+          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1 [video-1].webm',
           fileSize: '555555555',
           removed: false
         })

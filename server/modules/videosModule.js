@@ -2,6 +2,7 @@ const { Sequelize, sequelize } = require('../db.js');
 const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
+const { execSync } = require('child_process');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
@@ -403,6 +404,67 @@ class VideosModule {
     return { fileMap, duplicates };
   }
 
+  /**
+   * Scan for missing thumbnails and recover them from disk if possible
+   * @param {Array} videos - Array of video objects
+   */
+  async backfillThumbnails(videos) {
+    const imageDir = configModule.getImagePath();
+    const ffmpegPath = configModule.ffmpegPath;
+
+    for (const video of videos) {
+      if (!video.youtubeId) continue;
+
+      const expectedThumbPath = path.join(imageDir, `videothumb-${video.youtubeId}.jpg`);
+
+      try {
+        // Check if thumbnail already exists in images directory
+        await fs.access(expectedThumbPath);
+      } catch (err) {
+        // Thumbnail missing, try to recover from disk
+        if (!video.filePath) continue;
+
+        const videoDir = path.dirname(video.filePath);
+        try {
+          const files = await fs.readdir(videoDir);
+          // Look for any .jpg matching the ID pattern
+          const matchingThumb = files.find(f =>
+            f.toLowerCase().endsWith('.jpg') &&
+            (f.includes(`[${video.youtubeId}]`) || f.includes(` - ${video.youtubeId}`))
+          );
+
+          if (matchingThumb) {
+            const srcPath = path.join(videoDir, matchingThumb);
+            const tempThumbPath = expectedThumbPath + '.tmp.jpg';
+
+            try {
+              // Copy and resize
+              await fs.copyFile(srcPath, expectedThumbPath);
+
+              execSync(
+                `${ffmpegPath} -loglevel error -y -i "${expectedThumbPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${tempThumbPath}"`,
+                { stdio: 'pipe' }
+              );
+              await fs.rename(tempThumbPath, expectedThumbPath);
+              logger.info({ youtubeId: video.youtubeId }, 'Recovered missing thumbnail from disk');
+            } catch (procErr) {
+              logger.warn({ err: procErr.message, youtubeId: video.youtubeId }, 'Failed to process recovered thumbnail');
+              // Cleanup if failed
+              try {
+                await fs.access(tempThumbPath);
+                await fs.unlink(tempThumbPath);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }
+          }
+        } catch (dirErr) {
+          // Directory may be gone or inaccessible
+        }
+      }
+    }
+  }
+
   async backfillVideoMetadata(timeLimit = 5 * 60 * 1000) { // Default 5 minutes
     const startTime = Date.now();
     const logProgress = (message) => {
@@ -464,6 +526,9 @@ class VideosModule {
         });
 
         if (videos.length === 0) break;
+
+        // Attempt thumbnail recovery for this chunk
+        await this.backfillThumbnails(videos);
 
         const bulkUpdates = [];
         let chunkUpdated = 0;
