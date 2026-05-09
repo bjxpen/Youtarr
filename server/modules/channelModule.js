@@ -11,7 +11,7 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
-const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const { sanitizeNameLikeYtDlp, CHANNEL_NAME_MAX_BYTES } = require('./filesystem');
 const youtubeApi = require('./youtubeApi');
 const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
@@ -393,7 +393,7 @@ class ChannelModule {
       // If yt-dlp fails, fall back to sanitizing the uploader name
       logger.warn({ channelId: channel.channel_id, uploader: channel.uploader },
         'Could not determine folder_name via yt-dlp, using uploader as fallback');
-      return sanitizeNameLikeYtDlp(channel.uploader);
+      return sanitizeNameLikeYtDlp(channel.uploader, CHANNEL_NAME_MAX_BYTES);
     }
 
     const folderName = channelData.folder_name;
@@ -418,7 +418,7 @@ class ChannelModule {
     // Just sanitize the uploader we already have
     logger.warn({ channelId: channel.channel_id, uploader: channel.uploader },
       'Could not determine folder_name via yt-dlp, using uploader as fallback');
-    return sanitizeNameLikeYtDlp(channel.uploader);
+    return sanitizeNameLikeYtDlp(channel.uploader, CHANNEL_NAME_MAX_BYTES);
   }
 
   /**
@@ -633,7 +633,7 @@ class ChannelModule {
         if (info && info.channelId) {
           logger.info({ channelId: info.channelId, source: 'youtube-api' }, 'Fetched channel metadata via YouTube API');
           const unsanitizedFolderName = info.title || info.customUrl || info.channelId;
-          const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+          const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName, CHANNEL_NAME_MAX_BYTES);
 
           // Callers rely on entries.length > 0 as a "channel has uploads" signal.
           // When videoCount is null (owner hid the count), assume uploads exist;
@@ -679,7 +679,7 @@ class ChannelModule {
       const metadata = JSON.parse(content);
 
       const unsanitizedFolderName = metadata.uploader || metadata.channel || metadata.uploader_id;
-      const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+      const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName, CHANNEL_NAME_MAX_BYTES);
 
       return { ...metadata, folder_name: sanitizedFolderName };
 

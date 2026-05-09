@@ -9,7 +9,14 @@ const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
-const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries } = require('./filesystem');
+const {
+  buildChannelPath,
+  cleanupEmptyParents,
+  moveWithRetries,
+  ensureDirWithRetries,
+  truncateToBytes,
+  VIDEO_TITLE_MAX_BYTES
+} = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -338,7 +345,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       // Title (channel name + video title)
       const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
       if (channelName && jsonData.title) {
-        apArgs.push('--title', `${channelName} - ${jsonData.title}`);
+        // Truncate title to match filename truncation for consistency
+        const truncatedTitle = truncateToBytes(jsonData.title, VIDEO_TITLE_MAX_BYTES);
+        apArgs.push('--title', `${channelName} - ${truncatedTitle}`);
       }
 
       // Genre from YouTube categories

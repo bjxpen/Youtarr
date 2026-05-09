@@ -6,7 +6,8 @@ const customArgsParser = require('./customArgsParser');
 const {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE
+  VIDEO_FILE_TEMPLATE,
+  VIDEO_TITLE_MAX_BYTES
 } = require('../filesystem/constants');
 
 class YtdlpCommandBuilder {
@@ -42,7 +43,7 @@ class YtdlpCommandBuilder {
     const baseOutputPath = tempPathManager.getTempBasePath();
 
     // Use same filename as video file (without extension - yt-dlp adds .jpg)
-    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s]`;
+    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).${VIDEO_TITLE_MAX_BYTES}B [%(id)s]`;
 
     const segments = [baseOutputPath];
     if (subFolder) segments.push(subFolder);

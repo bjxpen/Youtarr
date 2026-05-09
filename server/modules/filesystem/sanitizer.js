@@ -70,6 +70,36 @@ function sanitizePathLikeYtDlp(s) {
 }
 
 /**
+ * Truncate a string to a maximum number of bytes without breaking UTF-8 characters
+ * This replicates yt-dlp's .NB template behavior
+ *
+ * @param {string} str - String to truncate
+ * @param {number} maxBytes - Maximum allowed bytes
+ * @returns {string} - Truncated string
+ */
+function truncateToBytes(str, maxBytes) {
+  if (!str || maxBytes <= 0) return '';
+
+  const buf = Buffer.from(str);
+  if (buf.length <= maxBytes) return str;
+
+  // Truncate the buffer
+  const truncatedBuf = buf.subarray(0, maxBytes);
+
+  // Buffer.toString('utf8') automatically handles partial characters at the end
+  // by replacing them with the replacement character (U+FFFD).
+  // We want to avoid that and instead slice until we have a valid UTF-8 string.
+  let result = truncatedBuf.toString('utf8');
+
+  // If the last character is the replacement character, it means we cut in the middle of a multi-byte char
+  while (result.endsWith('\uFFFD') && result.length > 0) {
+    result = result.slice(0, -1);
+  }
+
+  return result;
+}
+
+/**
  * Sanitize just a single filename/folder name component (not a full path)
  * This applies the same character replacement rules but doesn't handle path separators
  *
@@ -80,17 +110,23 @@ function sanitizePathLikeYtDlp(s) {
  * Example: "asdf..." => "asdf..#" (only last dot replaced)
  *
  * @param {string} name - The filename or folder name to sanitize
+ * @param {number|null} maxBytes - Optional byte limit for truncation
  * @returns {string} - The sanitized name
  */
-function sanitizeNameLikeYtDlp(name) {
+function sanitizeNameLikeYtDlp(name, maxBytes = null) {
   if (!name || typeof name !== 'string') {
     return '_';
+  }
+
+  let processedName = name;
+  if (maxBytes !== null && maxBytes > 0) {
+    processedName = truncateToBytes(name, maxBytes);
   }
 
   // Use the exact same regex as yt-dlp's _sanitize_path_parts
   // [/<>:"|\\?*] matches Windows-forbidden characters
   // [\s.]$ matches a single trailing whitespace or dot
-  const sanitized = name.replace(/[/<>:"|\\?*]|[\s.]$/g, '#');
+  const sanitized = processedName.replace(/[/<>:"|\\?*]|[\s.]$/g, '#');
 
   return sanitized || '_';
 }
@@ -98,5 +134,6 @@ function sanitizeNameLikeYtDlp(name) {
 module.exports = {
   sanitizePathLikeYtDlp,
   sanitizeNameLikeYtDlp,
-  sanitizePathParts
+  sanitizePathParts,
+  truncateToBytes
 };

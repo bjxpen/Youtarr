@@ -582,9 +582,9 @@ describe('ChannelDownloadGrouper', () => {
       // Template uses .NB for byte-based truncation to avoid path length issues with UTF-8
       const expectedPath = path.join(
         '/mock/youtube/output',
-        '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
-        '%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id).32B',
+        '%(uploader,channel,uploader_id).32B - %(title).50B - %(id)s',
+        '%(uploader,channel,uploader_id).32B - %(title).50B [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -597,9 +597,9 @@ describe('ChannelDownloadGrouper', () => {
       const expectedPath = path.join(
         '/mock/youtube/output',
         '__Tech',
-        '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
-        '%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id).32B',
+        '%(uploader,channel,uploader_id).32B - %(title).50B - %(id)s',
+        '%(uploader,channel,uploader_id).32B - %(title).50B [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -625,8 +625,8 @@ describe('ChannelDownloadGrouper', () => {
       // Template uses .NB for byte-based truncation to avoid path length issues with UTF-8
       const expectedPath = path.join(
         '/mock/youtube/output',
-        '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
+        '%(uploader,channel,uploader_id).32B',
+        '%(uploader,channel,uploader_id).32B - %(title).50B - %(id)s',
         'poster'
       );
 
@@ -640,8 +640,8 @@ describe('ChannelDownloadGrouper', () => {
       const expectedPath = path.join(
         '/mock/youtube/output',
         '__Tech',
-        '%(uploader,channel,uploader_id).80B',
-        '%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s',
+        '%(uploader,channel,uploader_id).32B',
+        '%(uploader,channel,uploader_id).32B - %(title).50B - %(id)s',
         'poster'
       );
 

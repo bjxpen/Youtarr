@@ -40,29 +40,39 @@ const AUDIO_EXTENSIONS = ['.mp3'];
 const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
 
 /**
+ * Maximum bytes for channel name in filenames/foldernames.
+ * Truncated to 32 bytes to ensure we stay well within filesystem limits
+ * (especially for eCryptfs and Windows MAX_PATH).
+ */
+const CHANNEL_NAME_MAX_BYTES = 32;
+
+/**
+ * Maximum bytes for video title in filenames/foldernames.
+ * Truncated to 50 bytes to ensure we stay well within filesystem limits.
+ */
+const VIDEO_TITLE_MAX_BYTES = 50;
+
+/**
  * yt-dlp output template for channel folder name
  * Uses uploader with fallback to channel, then uploader_id
- * Truncated to 80 bytes max to avoid filesystem path length issues with UTF-8 characters
  */
-const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
+const CHANNEL_TEMPLATE = `%(uploader,channel,uploader_id).${CHANNEL_NAME_MAX_BYTES}B`;
 
 /**
  * yt-dlp output template for video folder name
  * Format: "ChannelName - VideoTitle - VideoID"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
+ * Title is truncated to VIDEO_TITLE_MAX_BYTES bytes (not characters) to avoid path length issues with UTF-8
  * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
  */
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B - %(id)s`;
+const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).${VIDEO_TITLE_MAX_BYTES}B - %(id)s`;
 
 /**
  * yt-dlp output template for video file name
  * Format: "ChannelName - VideoTitle [VideoID].ext"
- * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
+ * Title is truncated to VIDEO_TITLE_MAX_BYTES bytes (not characters) to avoid path length issues with UTF-8
  * Using .NB syntax for byte-based truncation instead of .Ns for character-based
- * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
  */
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s].%(ext)s`;
+const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).${VIDEO_TITLE_MAX_BYTES}B [%(id)s].%(ext)s`;
 
 /**
  * Pattern to extract YouTube video ID from filename
@@ -134,6 +144,8 @@ module.exports = {
   VIDEO_EXTENSIONS,
   AUDIO_EXTENSIONS,
   MEDIA_EXTENSIONS,
+  CHANNEL_NAME_MAX_BYTES,
+  VIDEO_TITLE_MAX_BYTES,
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
