@@ -6,7 +6,10 @@ const customArgsParser = require('./customArgsParser');
 const {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
-  VIDEO_FILE_TEMPLATE
+  VIDEO_FILE_TEMPLATE,
+  getChannelTemplate,
+  getVideoFolderTemplate,
+  getVideoFileTemplate
 } = require('../filesystem/constants');
 
 class YtdlpCommandBuilder {
@@ -15,17 +18,23 @@ class YtdlpCommandBuilder {
    * Downloads always go to temp path first, then get moved to final location
    * @param {string|null} subFolder - Optional subfolder name
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {number} channelLimit - Optional byte limit for channel truncation
+   * @param {number} titleLimit - Optional byte limit for title truncation
    * @returns {string} - Full output path template
    */
-  static buildOutputPath(subFolder = null, skipVideoFolder = false) {
+  static buildOutputPath(subFolder = null, skipVideoFolder = false, channelLimit, titleLimit) {
     // Always use temp path - downloads are staged before moving to final location
     const baseOutputPath = tempPathManager.getTempBasePath();
 
+    const channelTpl = channelLimit ? getChannelTemplate(channelLimit) : CHANNEL_TEMPLATE;
+    const folderTpl = (channelLimit || titleLimit) ? getVideoFolderTemplate(channelLimit, titleLimit) : VIDEO_FOLDER_TEMPLATE;
+    const fileTpl = (channelLimit || titleLimit) ? getVideoFileTemplate(channelLimit, titleLimit) : VIDEO_FILE_TEMPLATE;
+
     const segments = [baseOutputPath];
     if (subFolder) segments.push(subFolder);
-    segments.push(CHANNEL_TEMPLATE);
-    if (!skipVideoFolder) segments.push(VIDEO_FOLDER_TEMPLATE);
-    segments.push(VIDEO_FILE_TEMPLATE);
+    segments.push(channelTpl);
+    if (!skipVideoFolder) segments.push(folderTpl);
+    segments.push(fileTpl);
 
     return path.join(...segments);
   }
@@ -35,19 +44,25 @@ class YtdlpCommandBuilder {
    * Thumbnails are staged in temp path alongside videos
    * @param {string|null} subFolder - Optional subfolder name
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {number} channelLimit - Optional byte limit for channel truncation
+   * @param {number} titleLimit - Optional byte limit for title truncation
    * @returns {string} - Thumbnail path template
    */
-  static buildThumbnailPath(subFolder = null, skipVideoFolder = false) {
+  static buildThumbnailPath(subFolder = null, skipVideoFolder = false, channelLimit, titleLimit) {
     // Always use temp path - thumbnails are staged with videos
     const baseOutputPath = tempPathManager.getTempBasePath();
 
+    const channelTpl = channelLimit ? getChannelTemplate(channelLimit) : CHANNEL_TEMPLATE;
+    const folderTpl = (channelLimit || titleLimit) ? getVideoFolderTemplate(channelLimit, titleLimit) : VIDEO_FOLDER_TEMPLATE;
+    const tLimit = titleLimit || 76;
+
     // Use same filename as video file (without extension - yt-dlp adds .jpg)
-    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s]`;
+    const thumbnailFilename = `${channelTpl} - %(title).${tLimit}B [%(id)s]`;
 
     const segments = [baseOutputPath];
     if (subFolder) segments.push(subFolder);
-    segments.push(CHANNEL_TEMPLATE);
-    if (!skipVideoFolder) segments.push(VIDEO_FOLDER_TEMPLATE);
+    segments.push(channelTpl);
+    if (!skipVideoFolder) segments.push(folderTpl);
     segments.push(thumbnailFilename);
 
     return path.join(...segments);
@@ -474,6 +489,8 @@ class YtdlpCommandBuilder {
    * @param {Object|null} filterConfig - Channel filter configuration
    * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {number} channelLimit - Optional byte limit for channel truncation
+   * @param {number} titleLimit - Optional byte limit for title truncation
    * @returns {string[]} - Array of yt-dlp command arguments
    */
   static getBaseCommandArgs(
@@ -482,14 +499,16 @@ class YtdlpCommandBuilder {
     subFolder = null,
     filterConfig = null,
     audioFormat = null,
-    skipVideoFolder = false
+    skipVideoFolder = false,
+    channelLimit,
+    titleLimit
   ) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
-    const outputPath = this.buildOutputPath(subFolder, skipVideoFolder);
-    const thumbnailPath = this.buildThumbnailPath(subFolder, skipVideoFolder);
+    const outputPath = this.buildOutputPath(subFolder, skipVideoFolder, channelLimit, titleLimit);
+    const thumbnailPath = this.buildThumbnailPath(subFolder, skipVideoFolder, channelLimit, titleLimit);
 
     // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
@@ -566,15 +585,17 @@ class YtdlpCommandBuilder {
    * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
    * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
    * @param {boolean} skipVideoFolder - If true, skip the video subfolder level (flat structure)
+   * @param {number} channelLimit - Optional byte limit for channel truncation
+   * @param {number} titleLimit - Optional byte limit for title truncation
    * @returns {string[]} - Array of yt-dlp command arguments
    */
-  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false, audioFormat = null, skipVideoFolder = false) {
+  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false, audioFormat = null, skipVideoFolder = false, channelLimit, titleLimit) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
-    const outputPath = this.buildOutputPath(null, skipVideoFolder);
-    const thumbnailPath = this.buildThumbnailPath(null, skipVideoFolder);
+    const outputPath = this.buildOutputPath(null, skipVideoFolder, channelLimit, titleLimit);
+    const thumbnailPath = this.buildThumbnailPath(null, skipVideoFolder, channelLimit, titleLimit);
 
     // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
@@ -639,6 +660,33 @@ class YtdlpCommandBuilder {
     args.push(...this.buildCustomArgs(config));
 
     return args;
+  }
+
+  /**
+   * Replace output path templates in a yt-dlp arguments array
+   * @param {string[]} args - Original arguments array
+   * @param {string} newOutputPath - New video output path template
+   * @param {string} newThumbnailPath - New thumbnail output path template
+   * @returns {string[]} - New arguments array
+   */
+  static updateOutputPaths(args, newOutputPath, newThumbnailPath) {
+    const newArgs = [...args];
+    for (let i = 0; i < newArgs.length; i++) {
+      if (newArgs[i] === '-o') {
+        const val = newArgs[i + 1];
+        if (!val) continue;
+
+        if (val.startsWith('thumbnail:')) {
+          newArgs[i + 1] = `thumbnail:${newThumbnailPath}`;
+        } else if (val.startsWith('pl_thumbnail:')) {
+          // Leave as is
+        } else {
+          // Standard output path
+          newArgs[i + 1] = newOutputPath;
+        }
+      }
+    }
+    return newArgs;
   }
 }
 

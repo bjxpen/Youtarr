@@ -93,6 +93,11 @@ jest.mock('../../filesystem', () => {
     cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
     ROOT_SENTINEL: '##ROOT##',
     GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
+    PATH_TRUNCATION_TIERS: [
+      { channel: 80, title: 76 },
+      { channel: 80, title: 50 },
+      { channel: 32, title: 50 }
+    ],
     resolveEffectiveSubfolder: jest.fn((subfolder) => {
       if (subfolder === '##ROOT##') return null;
       if (subfolder === '##USE_GLOBAL_DEFAULT##') return null;
@@ -1450,7 +1455,7 @@ describe('DownloadExecutor', () => {
         'Error detected during download'
       );
       expect(logger.info).toHaveBeenCalledWith(
-        { youtubeId: 'abc123XYZ_d', error: 'Video unavailable' },
+        { youtubeId: 'abc123XYZ_d', error: 'Video unavailable', isPathLengthError: false },
         'Recorded video failure'
       );
     });
@@ -1869,13 +1874,13 @@ describe('DownloadExecutor', () => {
 
       // Should only record the first error
       expect(logger.info).toHaveBeenCalledWith(
-        { youtubeId: 'dup123', error: 'First error' },
+        { youtubeId: 'dup123', error: 'First error', isPathLengthError: false },
         'Recorded video failure'
       );
 
       // Second error should be logged but not recorded
       expect(logger.info).not.toHaveBeenCalledWith(
-        { youtubeId: 'dup123', error: 'Second error' },
+        { youtubeId: 'dup123', error: 'Second error', isPathLengthError: false },
         'Recorded video failure'
       );
     });

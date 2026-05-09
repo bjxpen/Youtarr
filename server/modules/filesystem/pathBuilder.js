@@ -11,6 +11,9 @@ const {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
+  getChannelTemplate,
+  getVideoFolderTemplate,
+  getVideoFileTemplate,
   YOUTUBE_ID_BRACKET_PATTERN,
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN
@@ -126,28 +129,39 @@ function buildVideoPath(baseDir, subfolder, channelFolderName, videoFolderName) 
  * Build yt-dlp output template for video files
  * @param {string} baseDir - The base output directory
  * @param {string|null} subfolder - The subfolder name (without prefix) or null
+ * @param {number} channelLimit - Optional byte limit for channel truncation
+ * @param {number} titleLimit - Optional byte limit for title truncation
  * @returns {string} - Path template for yt-dlp -o argument
  */
-function buildOutputTemplate(baseDir, subfolder) {
+function buildOutputTemplate(baseDir, subfolder, channelLimit, titleLimit) {
+  const channelTpl = channelLimit ? getChannelTemplate(channelLimit) : CHANNEL_TEMPLATE;
+  const folderTpl = (channelLimit || titleLimit) ? getVideoFolderTemplate(channelLimit, titleLimit) : VIDEO_FOLDER_TEMPLATE;
+  const fileTpl = (channelLimit || titleLimit) ? getVideoFileTemplate(channelLimit, titleLimit) : VIDEO_FILE_TEMPLATE;
+
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+    return path.join(baseDir, subfolderSegment, channelTpl, folderTpl, fileTpl);
   }
-  return path.join(baseDir, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+  return path.join(baseDir, channelTpl, folderTpl, fileTpl);
 }
 
 /**
  * Build yt-dlp thumbnail output template
  * @param {string} baseDir - The base output directory
  * @param {string|null} subfolder - The subfolder name (without prefix) or null
+ * @param {number} channelLimit - Optional byte limit for channel truncation
+ * @param {number} titleLimit - Optional byte limit for title truncation
  * @returns {string} - Thumbnail path template for yt-dlp
  */
-function buildThumbnailTemplate(baseDir, subfolder) {
+function buildThumbnailTemplate(baseDir, subfolder, channelLimit, titleLimit) {
+  const channelTpl = channelLimit ? getChannelTemplate(channelLimit) : CHANNEL_TEMPLATE;
+  const folderTpl = (channelLimit || titleLimit) ? getVideoFolderTemplate(channelLimit, titleLimit) : VIDEO_FOLDER_TEMPLATE;
+
   if (subfolder) {
     const subfolderSegment = buildSubfolderSegment(subfolder);
-    return path.join(baseDir, subfolderSegment, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+    return path.join(baseDir, subfolderSegment, channelTpl, folderTpl, 'poster');
   }
-  return path.join(baseDir, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+  return path.join(baseDir, channelTpl, folderTpl, 'poster');
 }
 
 /**
