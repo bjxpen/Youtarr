@@ -655,6 +655,119 @@ class VideosModule {
     await video.update({ protected: protectedState });
     return { id: video.id, protected: protectedState };
   }
+
+  async getVideosForExport(options = {}) {
+    const {
+      videoIds = [],
+      search = '',
+      dateFrom = null,
+      dateTo = null,
+      sortBy = 'added',
+      sortOrder = 'desc',
+      channelFilter = '',
+      protectedFilter = 'off',
+      missingFilter = 'off',
+    } = options;
+
+    try {
+      // Build WHERE conditions
+      const whereConditions = [];
+      const replacements = {};
+
+      if (videoIds && Array.isArray(videoIds) && videoIds.length > 0) {
+        whereConditions.push('Videos.id IN (:videoIds)');
+        replacements.videoIds = videoIds;
+      } else {
+        if (search) {
+          whereConditions.push('(Videos.youTubeVideoName LIKE :search OR Videos.youTubeChannelName LIKE :search)');
+          replacements.search = `%${search}%`;
+        }
+
+        if (channelFilter) {
+          whereConditions.push('Videos.youTubeChannelName = :channelFilter');
+          replacements.channelFilter = channelFilter;
+        }
+
+        if (dateFrom) {
+          whereConditions.push('Videos.originalDate >= :dateFrom');
+          replacements.dateFrom = dateFrom.replace(/-/g, '');
+        }
+
+        if (dateTo) {
+          whereConditions.push('Videos.originalDate <= :dateTo');
+          replacements.dateTo = dateTo.replace(/-/g, '');
+        }
+
+        if (protectedFilter === 'only') {
+          whereConditions.push('Videos.protected = 1');
+        } else if (protectedFilter === 'exclude') {
+          whereConditions.push('Videos.protected = 0');
+        }
+
+        if (missingFilter === 'only') {
+          whereConditions.push('Videos.removed = 1');
+        } else if (missingFilter === 'exclude') {
+          whereConditions.push('Videos.removed = 0');
+        }
+      }
+
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+      // Build ORDER BY
+      let orderByColumn;
+      if (sortBy === 'published') {
+        orderByColumn = 'Videos.originalDate';
+      } else {
+        orderByColumn = 'timeCreated';
+      }
+
+      const validatedSortOrder = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+      const orderByClause = `ORDER BY ${orderByColumn} ${validatedSortOrder}`;
+
+      // Get videos
+      const query = `
+        SELECT
+          Videos.id,
+          Videos.youtubeId,
+          Videos.youTubeChannelName,
+          Videos.youTubeVideoName,
+          Videos.duration,
+          Videos.originalDate,
+          Videos.description,
+          Videos.channel_id,
+          Videos.filePath,
+          Videos.fileSize,
+          Videos.audioFilePath,
+          Videos.audioFileSize,
+          Videos.removed,
+          Videos.youtube_removed,
+          Videos.media_type,
+          Videos.normalized_rating,
+          Videos.rating_source,
+          Videos.protected,
+          COALESCE(Videos.last_downloaded_at, MAX(Jobs.timeCreated), STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
+        FROM Videos
+        LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
+        LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
+        ${whereClause}
+        GROUP BY Videos.id
+        ${orderByClause}
+      `;
+
+      const videos = await sequelize.query(query, {
+        replacements,
+        type: Sequelize.QueryTypes.SELECT,
+        model: Video,
+        mapToModel: true,
+        raw: true
+      });
+
+      return videos;
+    } catch (err) {
+      logger.error({ err }, 'Error in getVideosForExport');
+      throw err;
+    }
+  }
 }
 
 module.exports = new VideosModule();

@@ -144,6 +144,7 @@ export {
   X,
   ListFilter,
   LayoutGrid,
+  LayoutList,
   XCircle,
   Copy,
   Filter,

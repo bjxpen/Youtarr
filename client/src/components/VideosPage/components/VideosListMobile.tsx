@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Typography, Chip, Checkbox, Stack } from '../../ui';
-import { AlertCircle as ErrorOutlineIcon } from 'lucide-react';
+import { Box, Typography, Chip, Checkbox, Stack, Tooltip, IconButton } from '../../ui';
+import { AlertCircle as ErrorOutlineIcon, CheckSquare } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
 import { getMediaTypeInfo } from '../../../utils/videoStatus';
@@ -17,6 +17,8 @@ import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 export interface VideosListMobileProps {
   videos: VideoData[];
   selectedVideos: number[];
+  onSelectVideos?: (videoIds: number[]) => void;
+  onDeselectVideos?: (videoIds: number[]) => void;
   enabledChannels: EnabledChannel[];
   imageErrors: Record<string, boolean>;
   onToggleSelect: (videoId: number) => void;
@@ -48,6 +50,8 @@ function VideosListMobile({
   onOpenModal,
   onToggleProtection,
   onImageError,
+  onSelectVideos,
+  onDeselectVideos,
 }: VideosListMobileProps) {
   return (
     <Box>
@@ -262,27 +266,52 @@ function VideosListMobile({
               >
                 {video.youTubeVideoName}
               </Typography>
-              {channelId ? (
-                <Typography
-                  component={RouterLink}
-                  to={`/channel/${channelId}`}
-                  variant="caption"
-                  className="text-primary no-underline hover:underline block truncate"
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  style={{ fontSize: '0.7rem' }}
-                >
-                  {video.youTubeChannelName}
-                </Typography>
-              ) : (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  className="block truncate"
-                  style={{ fontSize: '0.7rem' }}
-                >
-                  {video.youTubeChannelName}
-                </Typography>
-              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                {onSelectVideos && (
+                  <Tooltip title={`Select all from ${video.youTubeChannelName}`}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0 }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const channelVideos = videos
+                          .filter((v) => v.youTubeChannelName === video.youTubeChannelName && !v.removed)
+                          .map((v) => v.id);
+                        const allSelected = channelVideos.every(id => selectedVideos.includes(id));
+                        if (allSelected && onDeselectVideos) {
+                          onDeselectVideos(channelVideos);
+                        } else {
+                          onSelectVideos(channelVideos);
+                        }
+                      }}
+                    >
+                      <CheckSquare size={12} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {channelId ? (
+                  <Typography
+                    component={RouterLink}
+                    to={`/channel/${channelId}`}
+                    variant="caption"
+                    className="text-primary no-underline hover:underline block truncate"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    style={{ fontSize: '0.7rem' }}
+                  >
+                    {video.youTubeChannelName}
+                  </Typography>
+                ) : (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    className="block truncate"
+                    style={{ fontSize: '0.7rem' }}
+                  >
+                    {video.youTubeChannelName}
+                  </Typography>
+                )}
+              </Box>
               <Stack direction="row" spacing={0.5} className="flex-wrap gap-1">
                 {!video.removed && (video.filePath || video.audioFilePath) && (
                   <DownloadFormatIndicator

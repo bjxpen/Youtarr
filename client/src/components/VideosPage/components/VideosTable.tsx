@@ -20,6 +20,7 @@ import {
 import {
   AlertCircle as ErrorOutlineIcon,
   Trash2 as DeleteIcon,
+  CheckSquare,
 } from 'lucide-react';
 import { formatDuration, formatYTDate } from '../../../utils';
 import { formatAddedDateTime, formatFileSize } from '../../../utils/formatters';
@@ -36,6 +37,8 @@ import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../../shared/chipStyles';
 export interface VideosTableProps {
   videos: VideoData[];
   selectedVideos: number[];
+  onSelectVideos?: (videoIds: number[]) => void;
+  onDeselectVideos?: (videoIds: number[]) => void;
   enabledChannels: EnabledChannel[];
   imageErrors: Record<string, boolean>;
   orderBy: 'published' | 'added';
@@ -65,6 +68,8 @@ function VideosTable({
   onToggleProtection,
   onDeleteSingle,
   onImageError,
+  onSelectVideos,
+  onDeselectVideos,
 }: VideosTableProps) {
   const selectableVideos = videos.filter((v) => !v.removed);
   const selectableIds = selectableVideos.map((v) => v.id);
@@ -263,20 +268,44 @@ function VideosTable({
                     </Typography>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    {channelId ? (
-                      <Typography
-                        component={RouterLink}
-                        to={`/channel/${channelId}`}
-                        variant="body2"
-                        className="text-primary no-underline hover:underline"
-                      >
-                        {video.youTubeChannelName}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {video.youTubeChannelName}
-                      </Typography>
-                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {onSelectVideos && (
+                        <Tooltip title={`Select all from ${video.youTubeChannelName}`}>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const channelVideos = videos
+                                .filter((v) => v.youTubeChannelName === video.youTubeChannelName && !v.removed)
+                                .map((v) => v.id);
+                              const allSelected = channelVideos.every(id => selectedVideos.includes(id));
+                              if (allSelected && onDeselectVideos) {
+                                onDeselectVideos(channelVideos);
+                              } else {
+                                onSelectVideos(channelVideos);
+                              }
+                            }}
+                          >
+                            <CheckSquare size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {channelId ? (
+                        <Typography
+                          component={RouterLink}
+                          to={`/channel/${channelId}`}
+                          variant="body2"
+                          className="text-primary no-underline hover:underline"
+                        >
+                          {video.youTubeChannelName}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          {video.youTubeChannelName}
+                        </Typography>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell style={{ whiteSpace: 'nowrap' }}>
                     {formatYTDate(video.originalDate)}
